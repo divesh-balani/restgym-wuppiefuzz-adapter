@@ -27,6 +27,11 @@ def check_enabled(t, wildcard):
     else:
         return False
 
+    # An uninitialised submodule folder has no config file: skip it instead of crashing.
+    if not os.path.isfile(config_file):
+        print(f"WARNING: {config_file} not found (submodule not initialised?), skipping {wildcard}")
+        return False
+
     with open(config_file, 'r') as stream:
         try:
             config = yaml.safe_load(stream)

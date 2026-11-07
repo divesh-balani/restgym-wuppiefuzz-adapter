@@ -43,6 +43,20 @@ trap 'STOPPING=1; [ -n "$CHILD" ] && kill -INT "$CHILD" 2>/dev/null' TERM INT
 
 log "API=$API TARGET=$TARGET TIME_BUDGET=${TIME_BUDGET:-unset} timeout=${TIMEOUT_S}s out=$OUT"
 
+# Per-run metadata (like metadata.yaml in TNO's WuppieFuzz benchmark).
+cat > "$OUT/metadata.yaml" <<EOF
+tool: wuppiefuzz
+tool_version: "$(wuppiefuzz version 2>&1 | tr -d '\n' | head -c 200)"
+mode: black-box
+api: $API
+time_budget_minutes: ${TIME_BUDGET:-unset}
+wuppiefuzz_timeout_seconds: $TIMEOUT_S
+power_schedule: default (fast)
+crash_criteria: default
+flags: "--report --output-format json --otel-http-receiver-bind off --otel-grpc-receiver-bind off"
+started_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+
 START=$(date +%s)
 
 # WuppieFuzz shuts down on the first transport error, and RESTgym's proxy answers 502 while
