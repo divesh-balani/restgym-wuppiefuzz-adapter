@@ -149,6 +149,15 @@ def launch_run(api, tool, run_count, total_runs, progress, experiment_task):
 
         os.makedirs(results_path, exist_ok=True, mode=0o777)
         os.makedirs(f'{results_path}{common.LOGS_PATH}', exist_ok=True, mode=0o777)
+        # Per-run folder where tools may keep their own outputs (mounted at /tool-output).
+        # chmod explicitly (makedirs' mode is masked by umask) so non-root tool users can write.
+        os.makedirs(f'{results_path}{common.TOOL_OUTPUT_PATH}', exist_ok=True)
+        os.chmod(f'{results_path}{common.TOOL_OUTPUT_PATH}', 0o777)
+        tool_volumes = dict(specification_volumes)
+        tool_volumes[f'{common.RESTGYM_BASE_DIR_HOST}/results/{api}/{tool}/{run}{common.TOOL_OUTPUT_PATH}'] = {
+            'bind': '/tool-output',
+            'mode': 'rw'
+        }
 
         message = '[green]START[/green]' if attempts == 4 else '[yellow]RETRY[/yellow]'
 
@@ -220,7 +229,7 @@ def launch_run(api, tool, run_count, total_runs, progress, experiment_task):
                     name=tool_container_name,
                     environment=env,
                     privileged=True,
-                    volumes=specification_volumes,
+                    volumes=tool_volumes,
                     network_mode='host',
                     mem_limit='16gb',
                     nano_cpus=8_000_000_000,

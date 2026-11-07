@@ -9,6 +9,7 @@ DOCKER_PREFIX = 'restgym-'
 DB_FILENAME = 'results.db'
 CODE_COVERAGE_PATH = '/code-coverage'
 LOGS_PATH = '/logs'
+TOOL_OUTPUT_PATH = '/tool-output'
 RESTGYM_BASE_DIR_HOST = os.getenv('RESTGYM_BASE_DIR', os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')))
 RESTGYM_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
