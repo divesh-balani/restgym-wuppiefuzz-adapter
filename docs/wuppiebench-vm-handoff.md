@@ -5,9 +5,20 @@ what was wrong with the first results, and what to run on the VM.
 
 ## Goal
 
-First proof of concept: a **black-box** comparison of **EvoMaster, Schemathesis and WuppieFuzz**
-in RESTgym on `scs` and `market`, with results whose accuracy we have checked. White-box mode comes later
-(see "Out of scope").
+A black-box proof of concept with all old results discarded and two setups on the same VM:
+
+- **Setup A: upstream RESTgym** (https://github.com/restgym/restgym, unmodified) running **RESTler + EvoMaster**.
+- **Setup B: this fork** running **RESTler + EvoMaster + WuppieFuzz**.
+
+APIs scs and market. White-box comes later (see "Out of scope").
+
+How to read A vs B:
+- **RESTler is the control.** Its wrapper, the proxy/JaCoCo infrastructure and the API images are identical in
+  both repos, so RESTler's A and B results must match (it is near-deterministic). If they don't, the fork
+  changed the measurement and the comparison is invalid.
+- **EvoMaster shows the effect of the budget fix.** Upstream hard-codes `--maxTime 1h`, so at 15 min it stops at ~25%
+  of its search. The fork uses the whole budget. The A vs B difference is expected and is evidence for the fix.
+- **WuppieFuzz is new** and is compared against B's RESTler and EvoMaster.
 
 ## What exists
 
@@ -80,11 +91,12 @@ in RESTgym on `scs` and `market`, with results whose accuracy we have checked. W
 
 ## Experiment protocol (PoC)
 
-- Tools: evomaster (patched budget), schemathesis, wuppiefuzz. All black-box.
-- APIs: scs, market. Budget: **15 min**, so results line up with the earlier runs (or 60 min if time allows).
-  **3 repetitions** minimum, 5 is better (WuppieFuzz and EvoMaster are stochastic).
-- Run the old RESTler numbers again only if you want them as a fourth baseline. Don't mix the Mac/old-VM runs
-  with new ones in one aggregation.
+- Same VM, same budget (**15 min**), same repetitions (**3**, or 5 if time allows), same parallelism setting in
+  both setups. Run A and B one after the other, not at the same time, so they don't compete for CPU.
+- Keep the clones separate (`~/restgym-upstream`, `~/restgym-fork`), each with its own `results/`. Dry runs stay
+  outside `results/`. Upstream's aggregation does not filter by budget.
+- Upstream has no fix for missing config files: initialise **all** its submodules, or its menus crash.
+- Record for each setup: repo commit, image digests (`docker images --digests`), VM CPU/RAM, start/end times.
 
 ## Accuracy checks per run (script these)
 
@@ -99,6 +111,9 @@ in RESTgym on `scs` and `market`, with results whose accuracy we have checked. W
 | Coverage monotonic | `code-coverage/*.csv` series | never decreases |
 
 ## Deliverable
+
+Three comparisons: (1) RESTler A vs B (control: should match), (2) EvoMaster A vs B (effect of the budget fix),
+(3) RESTler vs EvoMaster vs WuppieFuzz within B (the actual tool comparison).
 
 Per API × tool, report median/min/max for: requests (with rejected count), 2XX/4XX/5XX, covered
 operations, line/branch/method coverage, time to final coverage, AUC, and 5XX faults by
