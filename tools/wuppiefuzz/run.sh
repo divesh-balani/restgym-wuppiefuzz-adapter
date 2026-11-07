@@ -44,6 +44,20 @@ trap 'STOPPING=1; [ -n "$CHILD" ] && kill -INT "$CHILD" 2>/dev/null' TERM INT
 log "API=$API TARGET=$TARGET TIME_BUDGET=${TIME_BUDGET:-unset} timeout=${TIMEOUT_S}s out=$OUT"
 
 START=$(date +%s)
+
+# WuppieFuzz shuts down on the first transport error, and RESTgym's proxy answers 502 while
+# the API is still booting. Wait (inside our own budget) until the API answers for real.
+while [ "$STOPPING" -eq 0 ]; do
+    CODE=$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$TARGET/" 2>/dev/null)
+    case "$CODE" in 000|502|503|504) ;; *) break ;; esac
+    if [ $(( $(date +%s) - START )) -ge $(( TIMEOUT_S / 2 )) ]; then
+        log "WARNING: API still not ready (HTTP $CODE) after $(( $(date +%s) - START ))s, starting anyway"
+        break
+    fi
+    sleep 2
+done
+log "API ready check: HTTP $CODE after $(( $(date +%s) - START ))s"
+echo "$(( $(date +%s) - START ))" > "$OUT/api-wait-seconds.txt"
 RESTARTS=0
 while [ "$STOPPING" -eq 0 ]; do
     ELAPSED=$(( $(date +%s) - START ))
@@ -84,6 +98,16 @@ done
 
 log "done: restarts=$RESTARTS"
 echo "$RESTARTS" > "$OUT/restart-count.txt"
+
+# The default crash criteria flag most spec deviations, so crashes/ can hold tens of thousands
+# of small files per run (~150 MB in 5 min on scs). Pack them to keep results/ manageable.
+if [ -d "$OUT/crashes" ]; then
+    N=$(find "$OUT/crashes" -type f | wc -l)
+    if tar -czf "$OUT/crashes.tar.gz" -C "$OUT" crashes; then
+        rm -rf "$OUT/crashes"
+        log "packed $N crash files into crashes.tar.gz"
+    fi
+fi
 
 # RESTgym treats an exited tool container as a failure, so stay alive until it stops us.
 while [ "$STOPPING" -eq 0 ]; do sleep 1; done

@@ -23,9 +23,12 @@ Wrapper for [WuppieFuzz](https://github.com/TNO-S3/WuppieFuzz) (TNO), a coverage
 
 | Path | Content |
 |---|---|
-| `logs/wuppiefuzz-stdout.log` | WuppieFuzz JSON status lines, including its own cumulative `requests` count |
+| `logs/wuppiefuzz-stderr.log` | WuppieFuzz logs as JSON lines (it logs to stderr; stdout stays empty). Status lines carry a JSON string in `.msg` with `requests`, `executed_sequences`, `endpoint_coverage`, `objectives`. Extract with `jq -r '.msg' logs/wuppiefuzz-stderr.log \| grep '^{"event_msg' \| tail -1 \| jq .requests` |
 | `tool-output/reports/grafana/report.db` | WuppieFuzz's SQLite report (requests, responses, coverage, stats). Every restart adds a row to `runs` |
 | `tool-output/reports/<timestamp>/` | corpus, mermaid graphs, endpoint-coverage report (one folder per campaign) |
+| `tool-output/crashes.tar.gz` | objective inputs (packed after the campaign; see crash criteria below) |
+| `tool-output/queue/` | LibAFL corpus queue |
+| `tool-output/restart-count.txt`, `restarts.log` | restart accounting |
 | `tool-output/<api>-openapi.json` | the spec as it was actually fuzzed |
 
 With these you can compare WuppieFuzz's self-reported numbers with RESTgym's external measurement (proxy `results.db`, JaCoCo) for the same run.
@@ -35,6 +38,7 @@ With these you can compare WuppieFuzz's self-reported numbers with RESTgym's ext
 - **No seed option.** WuppieFuzz seeds its RNG from the clock (`StdRand::with_seed(current_nanos())` in `src/state.rs`), so runs cannot be reproduced exactly. Use repetitions and statistics.
 - **Restarts lose the corpus.** A restarted campaign begins again from the initial corpus generated from the spec. Runs with restarts are therefore not comparable with clean runs. Check `restart-count.txt`.
 - **Default power schedule: `Fast`** (`BaseSchedule::FAST`). Other schedules (e.g. `--power-schedule coe`) can be added as separate tool folders, such as `tools/wuppiefuzz-coe/`.
+- **Default crash criteria flag almost everything.** By default every spec deviation counts as an objective, including undocumented 4xx codes and schema mismatches. On scs, ~79% of executed sequences became objectives in 5 minutes. LibAFL puts objective inputs in `crashes/`, not the corpus, so this probably weakens the feedback loop as well as inflating output. `--crash-criteria Status5xxNotSpecified` (or similar) could go in a separate tool folder. This is a methodological choice, so it is not changed here.
 - **Black-box mode only.** WuppieFuzz gets endpoint coverage as feedback, not code coverage. That makes the comparison fair against black-box tools (Schemathesis, RESTler, EvoMaster black-box, …), but it **understates WuppieFuzz**, whose design targets grey-box fuzzing with a JaCoCo/LCOV/OTel coverage agent. RESTgym's API containers attach JaCoCo for measurement, but the tool can only reach `localhost:$PORT` (the proxy), not the agent, so grey-box mode needs infrastructure changes.
 
 Enable it by setting `enabled: true` in `restgym-tool-config.yml`, then build with `./restgym.sh b`.
