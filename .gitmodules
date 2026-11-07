@@ -22,9 +22,6 @@
 [submodule "tools/cats"]
 	path = tools/cats
 	url = git@github.com:restgym/cats-tool.git
-[submodule "tools/evomaster"]
-	path = tools/evomaster
-	url = git@github.com:restgym/evomaster-tool.git
 [submodule "tools/restest"]
 	path = tools/restest
 	url = git@github.com:restgym/restest-tool.git

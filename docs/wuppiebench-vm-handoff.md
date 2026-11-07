@@ -11,7 +11,7 @@ in RESTgym on `scs` and `market`, with results whose accuracy we have checked. W
 
 ## What exists
 
-- Repo: `restgym`, branch `wuppiefuzz-adapter` (not on GitHub; it arrives as a git bundle or fork).
+- Repo: https://github.com/divesh-balani/restgym-wuppiefuzz-adapter (personal fork of RESTgym, `main`).
   The TNO `WuppieFuzz-benchmark-main` folder was only read, never changed.
 - `tools/wuppiefuzz/`: Dockerfile (pinned release + sha256, pinned base digest, non-root), `run.sh`,
   README with caveats. Read `tools/wuppiefuzz/README.md` first.
@@ -22,7 +22,7 @@ in RESTgym on `scs` and `market`, with results whose accuracy we have checked. W
 
 ## Setup on the VM
 
-1. `git clone` / `git fetch` the bundle, then `git checkout wuppiefuzz-adapter`.
+1. `git clone https://github.com/divesh-balani/restgym-wuppiefuzz-adapter.git restgym && cd restgym`.
 2. Submodules use SSH URLs. Use
    `git config --global url."https://github.com/".insteadOf git@github.com:` and then
    `git submodule update --init --recursive`. The pinned evomaster and schemathesis commits fetch fine over HTTPS.
@@ -34,11 +34,13 @@ in RESTgym on `scs` and `market`, with results whose accuracy we have checked. W
 
 ## Issues to fix or watch (found in the first EvoMaster/RESTler results)
 
-1. **EvoMaster ignores the time budget (must fix).** `tools/evomaster/entrypoint.sh` hard-codes
+1. **EvoMaster ignored the time budget. FIXED in this fork:** `tools/evomaster` is now vendored (no longer a
+   submodule), and `entrypoint.sh` searches for `TIME_BUDGET*60 - 60` s, then idles. Verified on the Mac: 99.6% of budget
+   consumed in a 2-minute test. Background: the upstream wrapper hard-codes
    `--maxTime 1h`. In the 15-minute runs, EvoMaster's log ends at "Consumed search budget: 25%", so it was
    killed a quarter of the way through its own search and never reached the budget-dependent phases (e.g. focused
-   search at 50%). Its numbers understate it. Patch to `--maxTime ${TIME_BUDGET}m`, or slightly under it, as a
-   local change in the submodule, and note the patch in the results. Check after a run that the log shows ~100%.
+   search at 50%). Its numbers understate it. **Old EvoMaster results are invalid; rerun them.** After each run, check
+   that `evomaster-stdout.log` shows ~100% "Consumed search budget" and `[evomaster-wrapper] search finished`.
 2. **Proxy final-batch loss (accept and document).** `infrastructure/mitmproxy/store-interactions.py` commits
    every 100 rows, and the last partial batch is lost on stop. Every results.db count is a multiple of 100.
    Measured loss is 2 to 95 rows per run (<0.7%), and it affects all tools equally. A fix (commit in `done()`)
@@ -52,7 +54,8 @@ in RESTgym on `scs` and `market`, with results whose accuracy we have checked. W
    are Jackson "JSON parse error: …" variants (one root cause: malformed JSON returns 500). EvoMaster's 2 buckets
    are probably closer to the number of real faults. For the comparison, also report faults grouped by
    exception type and endpoint (manual or scripted), not just `unique_5XX`.
-5. **Aggregated CSVs mixed in the 5-minute dry runs.** `process_results.py` aggregates *every* run under
+5. **Aggregated CSVs mixed in the 5-minute dry runs. FIXED in this fork:** aggregation keeps only the most common
+   time budget (or `RESTGYM_AGGREGATE_BUDGET=<minutes>`) and prints a WARN line for each excluded run. Background: `process_results.py` aggregates *every* run under
    `results/`. The request-budget CSV uses the minimum request count per API across all runs, so the 5-minute
    RESTler dry run set the budget to 5,300/5,400 requests, which truncates every 15-minute run. Keep dry runs out of
    `results/` (move them away) before `./restgym.sh` analysis, and check the `interactions` column in

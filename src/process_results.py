@@ -115,10 +115,31 @@ def parse_time_budget(file_path):
     return 60
 
 
+# Keep only runs with the same time budget, so e.g. 5-minute dry runs do not end up in the
+# aggregated CSVs (they would also set the request budget to their much lower request count).
+# The budget is RESTGYM_AGGREGATE_BUDGET (minutes) if set, otherwise the most common one.
+def filter_same_budget(paths):
+    budgets = {}
+    for path in paths:
+        run_dir = path[:-len('/summary.json')] if path.endswith('/summary.json') else path
+        budgets[path] = parse_time_budget(f"{run_dir}/time-budget.txt") if os.path.exists(f"{run_dir}/time-budget.txt") else None
+    if not budgets:
+        return set()
+    wanted = os.getenv('RESTGYM_AGGREGATE_BUDGET')
+    if wanted:
+        wanted = int(wanted)
+    else:
+        values = [b for b in budgets.values()]
+        wanted = max(set(values), key=values.count)
+    excluded = sorted(p for p, b in budgets.items() if b != wanted)
+    for p in excluded:
+        print(f" => [[yellow]-WARN[/yellow]]: excluding {p} from aggregation (time budget {budgets[p]} min, aggregating {wanted} min runs)")
+    return set(p for p, b in budgets.items() if b == wanted)
+
 # Find minimum number of requests for API
 def extract_minimum_req_num():
     result = {}
-    processed_runs = collect_processed_runs()
+    processed_runs = filter_same_budget(collect_processed_runs())
     for processed_run in processed_runs:
         api = processed_run.split('/')[-3]
         with open(f"{processed_run}/summary.json", 'r') as summary_file:
@@ -444,7 +465,7 @@ def process_runs(paths):
     results_time = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
 
     # (1) Aggregate results w.r.t. time budget
-    summaries = collect_summaries()
+    summaries = filter_same_budget(collect_summaries())
     with open(f"{common.RESTGYM_BASE_DIR}/results/time_budget_aggregated_results_{results_time}.csv", mode='w') as aggregate_file:
         aggregate_writer = csv.writer(aggregate_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         aggregate_writer.writerow(['api', 'tool', 'run', 'interactions', '2XX', '4XX', '5XX', 'covered_operations', 'unique_5XX', 'branch_coverage', 'line_coverage', 'method_coverage', 'area_2XX', 'area_4XX', 'area_5XX', 'area_covered_operations', 'area_unique_5XX', 'area_branch_coverage', 'area_line_coverage', 'area_method_coverage'])
@@ -486,7 +507,7 @@ def process_runs(paths):
     with open(f"{common.RESTGYM_BASE_DIR}/results/request_budget_aggregate_results_{results_time}.csv", mode='w') as aggregate_file:
         aggregate_writer = csv.writer(aggregate_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         aggregate_writer.writerow(['api', 'tool', 'run', 'interactions', '2XX', '4XX', '5XX', 'covered_operations', 'unique_5XX', 'branch_coverage', 'line_coverage', 'method_coverage', 'area_2XX', 'area_4XX', 'area_5XX', 'area_covered_operations', 'area_unique_5XX', 'area_branch_coverage', 'area_line_coverage', 'area_method_coverage'])
-        for processed_run in collect_processed_runs():
+        for processed_run in filter_same_budget(collect_processed_runs()):
             api_info = processed_run.split('/')
             conn = sqlite3.connect(processed_run + '/' + common.DB_FILENAME)
             cursor = conn.cursor()
